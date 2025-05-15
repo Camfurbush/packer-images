@@ -1,0 +1,51 @@
+---
+- name: update all packages
+  yum:
+    name: '*'
+    state: latest
+
+- name: Install perl
+  ansible.builtin.package:
+    name: perl
+    state: present
+
+- name: Set yum update cronjob
+  cron:
+    name: "Updates yum everyday at 2:00am"
+    minute: "0"
+    hour: "2"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    job: /bin/yum -y update
+
+- name: Add the user 'camfu'
+  ansible.builtin.user:
+    name: camfu
+    comment: camfu
+    password: "{{ lookup('hashi_vault', 'secret=vmware/data/camfu')['password'] | password_hash('sha512') }}"
+    shell: /bin/bash
+
+- name: Deploy SSH Key
+  authorized_key:
+    user: camfu
+    key: "{{ lookup('hashi_vault', 'secret=vmware/data/camfu')['public_key'] }}"
+    state: present
+
+- name: Disable Password Authentication
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: "PasswordAuthentication no"
+    state: present
+    backup: yes
+
+- name: Disable Root Login
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: "PermitRootLogin no"
+    state: present
+    backup: yes
+  notify:
+    - restart ssh

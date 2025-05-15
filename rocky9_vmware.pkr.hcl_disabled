@@ -1,0 +1,55 @@
+locals {
+  password = vault("/vmware/data/password", "ssh_password")
+}
+
+
+source "vsphere-iso" "rocky9" {
+  username            = "Administrator@vsphere.local"
+  password            = local.password
+  vcenter_server      = "vsphere.lan"
+  vm_name             = "Template-ROCKY9"
+  host                = "nuc-esxi.lan"
+  insecure_connection = "true"
+
+  CPU_hot_plug         = true
+  CPUs                 = 1
+  RAM                  = 4096
+  RAM_hot_plug         = true
+  RAM_reserve_all      = false
+  convert_to_template  = false
+  datacenter           = "Datacenter"
+  datastore            = "datastore1"
+  disk_controller_type = ["pvscsi"]
+  guest_os_type        = "centos9_64Guest"
+  http_directory       = "./"
+  iso_paths            = ["[datastore1] ISOS/Rocky-9.0-x86_64-minimal.iso"]
+  network_adapters {
+    network      = "VM Network"
+    network_card = "e1000"
+  }
+  notes = "Build via Packer on ${formatdate("MM-DD-YYYY", timestamp())}"
+
+  communicator = "ssh"
+  ssh_username = "camfu"
+  ssh_password = "P@ssw0rd"
+
+  storage {
+    disk_size             = 30720
+    disk_thin_provisioned = true
+  }
+  boot_command = ["<tab> inst.ks=nfs:truenas.lan:/mnt/Pool1/NFS/Packer/rocky9/ks.cfg<enter><wait><enter>"]
+
+}
+
+build {
+  sources = ["source.vsphere-iso.rocky9"]
+  provisioner "ansible" {
+    playbook_file = "./playbook.yml"
+    ansible_env_vars = [
+      "ANSIBLE_SSH_ARGS='-oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedKeyTypes=ssh-rsa'",
+      "ANSIBLE_HOST_KEY_CHECKING=False"
+    ]
+    user            = "camfu"
+    extra_arguments = ["-vv"]
+  }
+}
